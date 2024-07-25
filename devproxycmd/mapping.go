@@ -3,6 +3,7 @@ package devproxycmd
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -44,6 +45,10 @@ func (pms *PathMaps) Set(arg string) error {
 	target, err := url.Parse(targetStr)
 	if err != nil {
 		return fmt.Errorf("bad URL: %w", err)
+	}
+
+	if target.Path == "" {
+		target.Path = "/"
 	}
 
 	switch target.Scheme {
@@ -200,15 +205,23 @@ func NewProxyMap(paths PathMaps) (*ProxyMap, error) {
 				r.Out.Host = p.Target.Host
 				r.SetXForwarded()
 
-				var uri = r.In.RequestURI
-				if uri == "" && strings.HasSuffix(p.Target.Path, "/") {
-					uri = "/"
+				var inURL = r.In.URL
+
+				targetPath, err := url.JoinPath(p.Target.Path, inURL.Path)
+				if err != nil {
+					log.Printf("JoinPath error: %s", err)
 				}
 
-				var target = p.Target.JoinPath(uri)
+				var outURL = url.URL{
+					Scheme:   p.Target.Scheme,
+					User:     p.Target.User,
+					Host:     p.Target.Host,
+					Path:     targetPath,
+					RawQuery: inURL.RawQuery,
+				}
 
-				r.Out.URL = target
-				r.Out.RequestURI = target.EscapedPath()
+				r.Out.URL = &outURL
+				r.Out.RequestURI = outURL.RequestURI()
 			},
 		}
 
