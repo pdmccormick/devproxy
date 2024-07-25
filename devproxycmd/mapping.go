@@ -1,6 +1,7 @@
 package devproxycmd
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
@@ -126,9 +127,10 @@ func (pm *PathMap) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type ProxyMap struct {
-	Paths      map[string]*PathMap
-	Transports map[string]*http.Transport
-	Mux        *http.ServeMux
+	Paths           map[string]*PathMap
+	Transports      map[string]*http.Transport
+	Mux             *http.ServeMux
+	TLSClientConfig tls.Config
 }
 
 var _ http.Handler = (*ProxyMap)(nil)
@@ -142,6 +144,9 @@ func NewProxyMap(paths PathMaps) (*ProxyMap, error) {
 		Paths:      make(map[string]*PathMap),
 		Transports: make(map[string]*http.Transport),
 		Mux:        http.NewServeMux(),
+		TLSClientConfig: tls.Config{
+			InsecureSkipVerify: true,
+		},
 	}
 
 	for _, p := range paths {
@@ -195,7 +200,9 @@ func NewProxyMap(paths PathMaps) (*ProxyMap, error) {
 
 		transport, ok := pm.Transports[transportKey]
 		if !ok {
-			transport = &http.Transport{}
+			transport = &http.Transport{
+				TLSClientConfig: &pm.TLSClientConfig,
+			}
 			pm.Transports[transportKey] = transport
 		}
 
